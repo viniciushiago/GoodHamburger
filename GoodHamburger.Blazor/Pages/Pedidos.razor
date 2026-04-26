@@ -1,0 +1,212 @@
+﻿@page "/pedidos"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject GoodHamburger.Blazor.Services.PedidoEstadoService EstadoService
+
+@using GoodHamburger.Blazor.Models
+
+<PageTitle>Pedidos</PageTitle>
+
+<h3>📋 Pedidos</h3>
+
+@if (carregando)
+{
+    <p>Carregando pedidos...</p>
+}
+else if (erro != null)
+{
+    <div class="alert alert-danger">@erro</div>
+}
+else if (!pedidos.Any())
+{
+    <div class="alert alert-info">Nenhum pedido encontrado.</div>
+}
+else
+{
+    <div class="row mt-4">
+        @foreach (var pedido in pedidos)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Pedido #@pedido.Id</strong>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => VerDetalhes(pedido)">
+                                🔍 Detalhes
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" @onclick="() => EditarPedido(pedido)">
+                                ✏️ Editar
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmarDelecao(pedido)">
+                                🗑️ Deletar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var item in pedido.Itens)
+                        {
+                            <div class="d-flex justify-content-between">
+                                <span>@item.Nome</span>
+                                <small>R$ @item.Preco.ToString("F2")</small>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Subtotal</small>
+                            <small>R$ @pedido.Subtotal.ToString("F2")</small>
+                        </div>
+                        <div class="d-flex justify-content-between text-success">
+                            <small>Desconto</small>
+                            <small>- R$ @pedido.Desconto.ToString("F2")</small>
+                        </div>
+                        <div class="d-flex justify-content-between fw-bold">
+                            <span>Total</span>
+                            <span>R$ @pedido.Total.ToString("F2")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* Modal de detalhes *@
+@if (pedidoSelecionado != null)
+{
+    <div class="modal-overlay" @onclick="FecharDetalhes">
+        <div class="modal-flutuante" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">📄 Pedido #@pedidoSelecionado.Id</h5>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="FecharDetalhes">✕</button>
+            </div>
+            <hr />
+            @foreach (var item in pedidoSelecionado.Itens)
+            {
+                <div class="d-flex justify-content-between mb-2">
+                    <div>
+                        <span>@item.Nome</span>
+                        <small class="text-muted ms-2">(@item.Tipo)</small>
+                    </div>
+                    <strong>R$ @item.Preco.ToString("F2")</strong>
+                </div>
+            }
+            <hr />
+            <div class="d-flex justify-content-between">
+                <small>Subtotal</small>
+                <small>R$ @pedidoSelecionado.Subtotal.ToString("F2")</small>
+            </div>
+            <div class="d-flex justify-content-between text-success">
+                <small>Desconto</small>
+                <small>- R$ @pedidoSelecionado.Desconto.ToString("F2")</small>
+            </div>
+            <div class="d-flex justify-content-between fw-bold mt-1">
+                <span>Total</span>
+                <span>R$ @pedidoSelecionado.Total.ToString("F2")</span>
+            </div>
+        </div>
+    </div>
+}
+
+@* Modal de confirmação de deleção *@
+@if (pedidoParaDeletar != null)
+{
+    <div class="modal-overlay" @onclick="CancelarDelecao">
+        <div class="modal-flutuante" @onclick:stopPropagation="true">
+            <h5>🗑️ Confirmar exclusão</h5>
+            <p>Deseja realmente deletar o <strong>Pedido #@pedidoParaDeletar.Id</strong>?</p>
+            <div class="d-flex gap-2 justify-content-end">
+                <button class="btn btn-outline-secondary" @onclick="CancelarDelecao">Cancelar</button>
+                <button class="btn btn-danger" @onclick="DeletarPedido" disabled="@deletando">
+                    @(deletando ? "Deletando..." : "✅ Confirmar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PedidoResponse> pedidos = new();
+    private bool carregando = true;
+    private string? erro;
+    private PedidoResponse? pedidoSelecionado;
+    private PedidoResponse? pedidoParaDeletar;
+    private bool deletando = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarPedidos();
+    }
+
+    private async Task CarregarPedidos()
+    {
+        carregando = true;
+        erro = null;
+        try
+        {
+            pedidos = await Http.GetFromJsonAsync<List<PedidoResponse>>("api/Pedido") ?? new();
+        }
+        catch (Exception ex)
+        {
+            erro = $"Erro ao carregar pedidos: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private void VerDetalhes(PedidoResponse pedido)
+    {
+        pedidoSelecionado = pedido;
+    }
+
+    private void FecharDetalhes()
+    {
+        pedidoSelecionado = null;
+    }
+
+    private void ConfirmarDelecao(PedidoResponse pedido)
+    {
+        pedidoParaDeletar = pedido;
+    }
+
+    private void CancelarDelecao()
+    {
+        pedidoParaDeletar = null;
+    }
+
+    private void EditarPedido(PedidoResponse pedido)
+    {
+        EstadoService.IniciarEdicao(pedido);
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task DeletarPedido()
+    {
+        if (pedidoParaDeletar == null) return;
+
+        deletando = true;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/Pedido/{pedidoParaDeletar.Id}");
+            if (response.IsSuccessStatusCode)
+            {
+                pedidoParaDeletar = null;
+                await CarregarPedidos();
+            }
+            else
+            {
+                erro = "Erro ao deletar pedido.";
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            deletando = false;
+        }
+    }
+}

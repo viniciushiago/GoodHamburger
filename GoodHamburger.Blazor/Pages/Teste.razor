@@ -1,0 +1,39 @@
+﻿@page "/teste"
+@inject HttpClient Http
+
+<h3>Teste de Integração</h3>
+
+<button @onclick="Testar">Buscar Pedidos</button>
+
+@if (carregando)
+{
+    <p>Carregando...</p>
+}
+else if (!string.IsNullOrEmpty(resultado))
+{
+    <pre>@resultado</pre>
+}
+
+@code {
+    private string resultado;
+    private bool carregando = false;
+
+    private async Task Testar()
+    {
+        carregando = true;
+        resultado = null;
+
+        try
+        {
+            resultado = await Http.GetStringAsync("api/pedido");
+        }
+        catch (Exception ex)
+        {
+            resultado = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false; // 🔥 garante que sempre sai do loading
+        }
+    }
+}

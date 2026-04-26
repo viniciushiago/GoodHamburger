@@ -1,0 +1,291 @@
+﻿@page "/"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject GoodHamburger.Blazor.Services.PedidoEstadoService EstadoService
+@using GoodHamburger.Blazor.Models
+@using GoodHamburger.Blazor.Models.Cardapio
+
+<PageTitle>Cardápio</PageTitle>
+
+<h3>🍔 Cardápio</h3>
+
+@if (carregando)
+{
+    <p>Carregando cardápio...</p>
+}
+else if (erro != null)
+{
+    <div class="alert alert-danger">@erro</div>
+}
+else if (cardapio != null)
+{
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <h5>🥪 Sanduíches</h5>
+            @foreach (var item in cardapio.Sanduiches)
+            {
+                <div class="position-relative mb-2">
+                    <div class="card card-item" @onclick="() => AbrirPopover(item)">
+                        <div class="card-body d-flex justify-content-between">
+                            <span>@item.Nome</span>
+                            <strong>R$ @item.Preco.ToString("F2")</strong>
+                        </div>
+                    </div>
+                    @if (itemSelecionado == item)
+                    {
+                        <div class="popover-confirmar">
+                            <p class="mb-2">Adicionar <strong>@item.Nome</strong> ao pedido?</p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-success" @onclick:stopPropagation="true" @onclick="() => AdicionarAoPedido(item)">✅ Sim</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation="true" @onclick="FecharPopover">❌ Não</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="col-md-4">
+            <h5>🍟 Acompanhamentos</h5>
+            @foreach (var item in cardapio.Acompanhamentos)
+            {
+                <div class="position-relative mb-2">
+                    <div class="card card-item" @onclick="() => AbrirPopover(item)">
+                        <div class="card-body d-flex justify-content-between">
+                            <span>@item.Nome</span>
+                            <strong>R$ @item.Preco.ToString("F2")</strong>
+                        </div>
+                    </div>
+                    @if (itemSelecionado == item)
+                    {
+                        <div class="popover-confirmar">
+                            <p class="mb-2">Adicionar <strong>@item.Nome</strong> ao pedido?</p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-success" @onclick:stopPropagation="true" @onclick="() => AdicionarAoPedido(item)">✅ Sim</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation="true" @onclick="FecharPopover">❌ Não</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="col-md-4">
+            <h5>🥤 Bebidas</h5>
+            @foreach (var item in cardapio.Bebidas)
+            {
+                <div class="position-relative mb-2">
+                    <div class="card card-item" @onclick="() => AbrirPopover(item)">
+                        <div class="card-body d-flex justify-content-between">
+                            <span>@item.Nome</span>
+                            <strong>R$ @item.Preco.ToString("F2")</strong>
+                        </div>
+                    </div>
+                    @if (itemSelecionado == item)
+                    {
+                        <div class="popover-confirmar">
+                            <p class="mb-2">Adicionar <strong>@item.Nome</strong> ao pedido?</p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-success" @onclick:stopPropagation="true" @onclick="() => AdicionarAoPedido(item)">✅ Sim</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation="true" @onclick="FecharPopover">❌ Não</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <h5>🏷️ Regras de Desconto</h5>
+        @foreach (var regra in cardapio.RegrasDeDesconto)
+        {
+            <div class="alert alert-success py-2">
+                @regra.Combinacao → <strong>@regra.Desconto</strong>
+            </div>
+        }
+    </div>
+}
+
+@* Painel flutuante do pedido *@
+@if (itensPedido.Any())
+{
+    <div class="painel-pedido">
+        <h6>🛒 Meu Pedido</h6>
+        <hr />
+        @foreach (var item in itensPedido)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span>@item.Nome</span>
+                <div class="d-flex align-items-center gap-2">
+                    <small>R$ @item.Preco.ToString("F2")</small>
+                    <button class="btn btn-sm btn-outline-danger py-0" @onclick="() => RemoverItem(item)">✕</button>
+                </div>
+            </div>
+        }
+        <hr />
+        <div class="d-flex justify-content-between">
+            <small>Subtotal</small>
+            <small>R$ @Subtotal.ToString("F2")</small>
+        </div>
+        <div class="d-flex justify-content-between text-success">
+            <small>Desconto</small>
+            <small>- R$ @Desconto.ToString("F2")</small>
+        </div>
+        <div class="d-flex justify-content-between fw-bold mt-1">
+            <span>Total</span>
+            <span>R$ @Total.ToString("F2")</span>
+        </div>
+        <button class="btn btn-success w-100 mt-3" @onclick="ConfirmarPedido" disabled="@(enviando || erroPedido)">
+            @(enviando ? "Enviando..." : EstadoService.EmEdicao ? "✅ Atualizar Pedido" : "✅ Confirmar Pedido")
+        </button>
+        @if (!string.IsNullOrEmpty(mensagemPedido))
+        {
+            <div class="alert @(erroPedido ? "alert-danger" : "alert-success") mt-2 py-1 small">
+                @mensagemPedido
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private CardapioResponse? cardapio;
+    private bool carregando = true;
+    private string? erro;
+    private ItemCardapio? itemSelecionado;
+    private List<ItemCardapio> itensPedido = new();
+    private bool enviando = false;
+    private string? mensagemPedido;
+    private bool erroPedido = false;
+
+    private decimal Subtotal => itensPedido.Sum(i => i.Preco);
+    private decimal Desconto
+    {
+        get
+        {
+            var temSanduiche = itensPedido.Any(i => i.Tipo == "Sanduiche");
+            var temBatata = itensPedido.Any(i => i.Tipo == "Batata");
+            var temRefrigerante = itensPedido.Any(i => i.Tipo == "Refrigerante");
+
+            if (temSanduiche && temBatata && temRefrigerante) return Subtotal * 0.20m;
+            if (temSanduiche && temRefrigerante) return Subtotal * 0.15m;
+            if (temSanduiche && temBatata) return Subtotal * 0.10m;
+            return 0;
+        }
+    }
+    private decimal Total => Subtotal - Desconto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            cardapio = await Http.GetFromJsonAsync<CardapioResponse>("api/Cardapio");
+
+            // Se veio de uma edição, carrega os itens do pedido
+            if (EstadoService.EmEdicao)
+            {
+                foreach (var item in EstadoService.ItensEmEdicao)
+                {
+                    itensPedido.Add(new ItemCardapio
+                    {
+                        Nome = item.Nome,
+                        Preco = item.Preco,
+                        Tipo = item.Tipo
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = $"Erro ao carregar cardápio: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private void AbrirPopover(ItemCardapio item)
+    {
+        itemSelecionado = itemSelecionado == item ? null : item;
+    }
+
+    private void FecharPopover()
+    {
+        itemSelecionado = null;
+    }
+
+    private void AdicionarAoPedido(ItemCardapio item)
+    {
+        var jaExiste = itensPedido.Any(i => i.Tipo == item.Tipo);
+        if (jaExiste)
+        {
+            mensagemPedido = $"Já existe um item do tipo {item.Tipo} no pedido!";
+            erroPedido = true;
+        }
+        else
+        {
+            itensPedido.Add(item);
+            mensagemPedido = null;
+            erroPedido = false;
+        }
+        itemSelecionado = null;
+    }
+
+    private void RemoverItem(ItemCardapio item)
+    {
+        itensPedido.Remove(item);
+        mensagemPedido = null;
+    }
+
+    private async Task ConfirmarPedido()
+    {
+        enviando = true;
+        mensagemPedido = null;
+
+        try
+        {
+            var payload = new
+            {
+                itens = itensPedido.Select(i => new
+                {
+                    tipo = i.Tipo == "Sanduiche" ? 1 : i.Tipo == "Batata" ? 2 : 3,
+                    nome = i.Nome,
+                    preco = i.Preco
+                })
+            };
+
+            HttpResponseMessage response;
+
+            if (EstadoService.EmEdicao)
+            {
+                response = await Http.PutAsJsonAsync($"api/Pedido/{EstadoService.PedidoEmEdicaoId}", payload);
+            }
+            else
+            {
+                response = await Http.PostAsJsonAsync("api/Pedido", payload);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                itensPedido.Clear();
+                mensagemPedido = EstadoService.EmEdicao ? "Pedido atualizado com sucesso! 🎉" : "Pedido realizado com sucesso! 🎉";
+                EstadoService.LimparEdicao();
+                erroPedido = false;
+            }
+            else
+            {
+                var erroMsg = await response.Content.ReadAsStringAsync();
+                mensagemPedido = $"Erro: {erroMsg}";
+                erroPedido = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensagemPedido = $"Erro: {ex.Message}";
+            erroPedido = true;
+        }
+        finally
+        {
+            enviando = false;
+        }
+    }
+}
